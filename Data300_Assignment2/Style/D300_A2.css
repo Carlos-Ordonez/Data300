@@ -1,0 +1,49 @@
+
+h1, h2, h3 {
+  color: darkred;
+  text-align: center;
+}
+
+h5 {
+  color: black;
+  text-align: center;
+}
+
+table {
+  border-collapse: collapse;
+}
+
+caption {
+  font: bold;
+  background-color: red;
+  border-bottom: black thin solid;
+  border-top: black thin solid;
+  border-left: black thin solid;
+  border-right: black thin solid;
+}
+
+th {
+  background-color: silver;
+  border-bottom: black thin solid;
+  border-top: black thin solid;
+  border-left: black thin solid;
+  border-right: black thin solid;
+}
+
+td {
+  border-bottom: black thin solid;
+  border-top: black thin solid;
+  border-left: black thin solid;
+  border-right: black thin solid;
+}
+
+table.center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+svg {
+  display: block;
+  margin: auto;
+  padding: 20px solid red;
+}

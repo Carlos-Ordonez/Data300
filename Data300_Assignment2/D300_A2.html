@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+
+<!--
+  Course: DATA 300L 111 Spring 2019
+  Author: Carlos
+-->
+
+<head>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <title>Assignment #2</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" type="text/css" href="Style//D300_A2.css">
+
+    <h1>Data 300 Assignment 2</h1>
+    <h2>An Intro to D3</h2>
+    <h3>An Exploration of Pokemon</h3>
+    <h3>Developer: Carlos Ordonez</h3>
+
+
+    <h5>CWID: 20086993</h5>
+
+    <h4>I have chosen a data-set which contains all of the original 151 Pokemon from the first release of the game.
+        This data-set
+        contains 16 variables of varying hierarchy and type. I have extracted the specific attributes: num, name,
+        type, height, weight, avg_spawn. These specific attributes give information on each Pokemon size, type, and
+        general rarity in the game. I have chosen this data-set because it was relatively small and has a large
+        variety of different data types.
+    </h4>
+</head>
+
+<body>
+    <script>
+
+        function cleanup(raw_data) {
+            raw_data.forEach(function (obj) {
+                delete obj["id"];
+                delete obj["img"];
+                delete obj["candy"];
+                delete obj["candy_count"];
+                delete obj["egg"];
+                delete obj["spawn_chance"];
+                delete obj["spawn_time"];
+                delete obj["multipliers"];
+                delete obj["weaknesses"];
+                delete obj["prev_evolution"];
+                delete obj["next_evolution"];
+            })
+            return raw_data;
+        }
+
+        function scatter_Cleanup(clean_data) {
+            for (var i = 0; i < clean_data.length; i++) {
+                clean_data[i].height = +clean_data[i].height.slice(0, -2);
+                clean_data[i].weight = +clean_data[i].weight.slice(0, -3);
+            }
+            return clean_data;
+        }
+
+        d3.json("Data//pokedex.json", function (error, raw_data) {
+            var clean_data = cleanup(raw_data);
+
+            //-----------------------------------Data Table ------------------------------------------//
+
+            //create columns object
+            var columns = Object.keys(clean_data[0]);
+
+            //create table object
+            var table = d3.select("body").append("table");
+
+            //create table head object
+            var thead = table.append("thead");
+
+            //create table body object
+            var tbody = table.append("tbody");
+
+            //attach caption to table
+            table.append("caption").html("Pokedex");
+
+            //build table from data
+            thead.append("tr").selectAll("th")
+                .data(columns)
+                .enter()
+                .append("th")
+                .text(function (d) { return d; });
+
+            var rows = tbody.selectAll("tr")
+                .data(raw_data)
+                .enter()
+                .append("tr");
+
+            var cells = rows.selectAll("td")
+                .data(function (row) {
+                    return d3.range(Object.keys(row).length).
+                        map(function (column, i) {
+                            return row[columns[i]];
+                        });
+                })
+                .enter()
+                .append("td")
+                .text(function (d) {
+                    return d;
+                });
+            //-------------------------------Bar Chart-----------------------------------------//
+
+            //aggregate data
+            var avg_bar_data = d3.nest()
+                .key(function (d) { return d.type; })
+                .rollup(function (d) {
+                    return d3.mean(d, function (g) { return g.avg_spawns; }).toFixed(2)
+                }).entries(raw_data);
+
+            //format data
+            avg_bar_data.forEach(function (d) {
+                d.Pokemon_Type = d.key;
+                d.Average_Spawns = +d.value;
+            })
+
+            //sort data
+            avg_bar_data.sort(function (a, b) {
+                return d3.descending(a.Average_Spawns, b.Average_Spawns)
+            })
+
+            //Format Svg
+            var margin = { top: 20, right: 27, bottom: 100, left: 40 },
+                width = 1200 - margin.left - margin.right,
+                height = 450 - margin.top - margin.bottom;
+
+            var x = d3.scaleBand()
+                .range([0, width])
+                .padding(0.1);
+
+            var y = d3.scaleLinear()
+                .range([height, 0]);
+
+            //build Svg
+            var svg = d3.select("body").append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform",
+                    "translate(" + margin.left + "," + margin.top + ")");
+
+
+            x.domain(avg_bar_data.map(function (d) { return d.key; }));
+            y.domain([0, d3.max(avg_bar_data, function (d) { return +d.value; }) + 50]);
+
+            svg.selectAll(".bar")
+                .data(avg_bar_data)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("x", function (d) { return x(d.key) })
+                .attr("width", x.bandwidth())
+                .text("X axis")
+                .attr("y", function (d) { return y(d.value); })
+                .attr("height", function (d) { return height - y(d.value); })
+                .enter();
+
+            svg.append("g")
+                .attr("transform", "translate(0," + height + ")")
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                .attr("dx", ".85em")
+                .attr("dy", "-.55em")
+                .attr("transform", "rotate(50)")
+                .style("text-anchor", "start");
+
+            svg.append("g")
+                .call(d3.axisLeft(y));
+
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", 0)
+                .style("text-anchor", "middle")
+                .text("Average Spawns by Pokemon Type");
+
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", height + 75)
+                .style("text-anchor", "middle")
+                .text("This table displays average spawn rate by pokemon type ordered from most common to rarest ");
+
+
+            //--------------------------------Scatter plot-----------------------------------//
+            scatter_Data = scatter_Cleanup(clean_data);
+
+            var margin = { top: 30, right: 50, bottom: 60, left: 40 };
+            var width = 1200 - margin.left - margin.right;
+            var height = 800 - margin.top - margin.bottom;
+
+            var svg = d3.select('body')
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom)
+                .append('g')
+                .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+
+            //set scale
+            var xScale = d3.scaleLog()
+                .range([0, width]);
+
+
+            var yScale = d3.scaleLog()
+                .range([height, 0]);
+
+            // square root scale.
+            var radius = d3.scaleSqrt()
+                .range([2, 5]);
+
+            //set axis 
+            var xAxis = d3.axisBottom()
+                .scale(xScale);
+
+            var yAxis = d3.axisLeft()
+                .scale(yScale);
+
+
+            var color = d3.scaleOrdinal(d3.schemeCategory20b);
+
+            xScale.domain(d3.extent(scatter_Data, function (d) {
+                return d.weight;
+            })).nice();
+
+            yScale.domain(d3.extent(scatter_Data, function (d) {
+                return d.height;
+            })).nice();
+
+            radius.domain(d3.extent(scatter_Data, function (d) {
+                return d.avg_spawns;
+            })).nice();
+
+            svg.append('g')
+                .attr('transform', 'translate(0,' + height + ')')
+                .attr('class', 'x axis')
+                .call(xAxis);
+
+            // y-axis is translated to (0,0)
+            svg.append('g')
+                .attr('transform', 'translate(0,0)')
+                .attr('class', 'y axis')
+                .call(yAxis);
+
+            var bubble = svg.selectAll('.bubble')
+                .data(scatter_Data)
+                .enter().append('circle')
+                .attr('class', 'bubble')
+                .attr('cx', function (d) { return xScale(d.weight); })
+                .attr('cy', function (d) { return yScale(d.height); })
+                .attr('r', function (d) { return radius(d.avg_spawns * 20); })
+                .style('fill', function (d) { return color(d.type); });
+
+
+            bubble.append('title')
+                .attr('x', function (d) { return radius(d.avg_spawns); })
+                .text(function (d) {
+                    return "Name: " + d.name + ", Type: " + d.type + ", Height (m): " + d.height + ", Weight (kg): " + d.weight + ", Average Spawns: " + d.avg_spawns;
+                });
+
+            svg.append('text')
+                .attr('x', 10)
+                .attr('y', 10)
+                .attr('class', 'label')
+                .text('log(Height)');
+
+            svg.append('text')
+                .attr('x', width)
+                .attr('y', height - 10)
+                .attr('text-anchor', 'end')
+                .attr('class', 'label')
+                .text('log(Weight)');
+
+            var legend = svg.selectAll('legend')
+                .data(color.domain())
+                .enter().append('g')
+                .attr('class', 'legend')
+                .attr('transform', function (d, i) { return 'translate(0,' + i * 20 + ')'; });
+
+            legend.append('rect')
+                .attr('x', width)
+                .attr('width', 18)
+                .attr('height', 18)
+                .style('fill', color);
+
+            legend.append('text')
+                .attr('x', width - 10)
+                .attr('y', 9)
+                .attr('dy', '.35em')
+                .style('text-anchor', 'end')
+                .text(function (d) { return d; });
+
+            legend.on('click', function (type) {
+
+                d3.selectAll('.bubble')
+                    .style('opacity', 0.0)
+                    .filter(function (d) {
+                        return d.type.join(",") == type;
+                    })
+                    .style('opacity', 10)
+                    .text(function (d) {
+                        return d.name;
+                    });
+            })
+
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", 0)
+                .style("text-anchor", "middle")
+                .text("LogScale of Height vs Weight");
+
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", height + 35)
+                .style("text-anchor", "middle")
+                .text("This table displays a scatter plot of height vs weight for all the Pokemon. When a type is selected in the legend those pokemon are isolated in the plot.");
+
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", height + 55)
+                .style("text-anchor", "middle")
+                .text("I have set it on a log scale because of the relativley large ammounts of outliers ");
+
+            d3.select("body").append("p").text("For this data set I have first chosen to display a table of the full pokedex. While this is a relatively long table that necessitates vertical scrolling," +
+                " I felt it is necessary to initially display the full pokedex to give context to the rest of the charts, as well as provide a source of any reference needed" +
+                " throughout my visualization. My second chart displays the aggregated data of each Pokemon type and their average spawn rate. It is ordered by the highest spawn rate, or" +
+                " most common Pokemon type, to the lowest spawn rate, or the most rare. I decided against displaying the specific average spawn rate of each type of Pokemon above each bar" +
+                " as this is not really a meaningful attribute in itself but more of a referential attribute to provide an ordering to the Pokemon types. This charts purpose is to display" +
+                " how rare each Pokemon type is in relation to all other Pokemon types. It can be used as a reference while playing the game to help determine in general which Pokemon type to" +
+                " try and acquire if one were to pertain to the idea that rarer Pokemon are better Pokemon. My third chart is a scatter plot of the weight of each Pokemon vs the height" +
+                " with the radius of each point being that Pokemon average spawn rate. I have decided to place this chart on a log scale, while this is done cautiously, I feel it is necessary" +
+                " as their are a relatively large number of very large Pokemon, as well as very small Pokemon, in relation to the majority of normal size Pokemon, which makes the chart cluttered and un-meaningful." +
+                " To ensure user keep this fact in mind that this is plotted on a log scale I have labeled the axis as a log scale of their respective variable, displayed the actual log scale on each axis," +
+                " as well as titled my chart as a log scale of weight vs height so their is triple reinforcement of the idea that this is on a log scale. I have also displayed each" +
+                " Pokemon type in a separate color, but due to the fact that their are over 30 Pokemon types and I am only using a 20 grade color scheme this can become confusing and difficult to make sense of" +
+                " not to mention the sole use of color is a poor way to display any attribute as it can be sensed differently by different people. I have provided a filter function which" +
+                " allows you to select which Pokemon type you want to display and it isolates that type so you can see the relative sizes of each Pokemon according to their type" +
+                " for which color is not a necessary channel merely an additional one. This chart is used to show the distribution of size throughout each type of Pokemon. It is in accordance to " +
+                " the rule of thumb overview, zoom and filter, details on demand. this is because it first provides an overview then allows the user to filter the data as well as provides" +
+                " the specifics of the data point upon mouser of each data point.");
+        });
+    </script>
+<h4>This data set was aquired from:https://raw.githubusercontent.com/Biuni/PokemonGO-Pokedex/master/pokedex.json</h4>
+</body>
+
+</html>
