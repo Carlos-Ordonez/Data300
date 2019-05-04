@@ -13,7 +13,7 @@ var height = 1000 - margin.top - margin.bottom;
 var svg = d3.select('body').append('svg')
       .attr('width', width)
       .attr('height', height);
-
+var minDate;
 var projection = d3.geoMercator()
       .translate([(width) / 2, (height)/2])
       .scale(200000)
@@ -36,7 +36,6 @@ function Station(id, long, lat, name) {
 }
 
 function plotStations(data){
-  findStations(data);
   latMean = 0;
   longMean = 0;
   for(station in stations){
@@ -52,37 +51,64 @@ function plotStations(data){
       .data(stations)
       .enter()
       .append('circle')
-      .attr('id', function (d) { return 'Station-' + d.id; })
+      .attr('id', function (d) { return 'Station'})
       .attr('cx', function (d) { return projection(d.geo)[0]; })
       .attr('cy', function (d) { return projection(d.geo)[1]; })
       .attr('r', '3px')
       .attr('fill', 'white')
       .attr('stroke', 'black')
       .attr('stroke-width', 1)
-      .attr('count', 15);
-/*      .transition()
-      .data(startStations)
-      .attr('count', function() { return d3.select(this).attr('count') - 1;});
-      .delay(function(d) { return (new Date(d) - d3.min(data, function(d) { return new Date(d);})) / 75000;})
+      .attr('count', 15)
+      .each(function(d, i){
+          station = d3.select(this)
+          for(startTime in d.bikesIn) {
+            d3.select(this)
+                .transition()
+                .attr('count', function(d) { return station.attr('count') + 1;})
+                .attr('r', function(d) { return station.attr('count') + 1;})
+//                .attr('fill', function(d) { return d3.interpolateRgb("red", "blue")(d3.select(this).attr('count'));})
+                .delay(function(d) { return (new Date(startTime) - minDate) / 75000;});
+          }
+        });
+          
+
 //      .attr('count', function(d) { svg.select(this)
       //(new Date(d['Start Time']) - d3.min(data, function(d) { return new Date(d['Start Time']);})) / 75000*/
 }
 
-  
-stationIDs = new Set();
 stations = []
-function addStation(id, long, lat, name){
-  if(!stationIDs.has(id) && lat != null && long != null) {
-    stationIDs.add(id);
-    stations.push(new Station(id, long, lat, name));
-  } else if(stationIds.has(id))
+function addStationStart(id, long, lat, name, startTime){
+  if(lat != null && long != null) {
+    station = stations.find((s) => s.name == name);
+    if(station == null) {
+      station = new Station(id, long, lat, name);
+      stations.push(station);
+    }
+    if(startTime != null) {
+      station.bikesOut.push(new Date(startTime));
+      station.bikesOut.sort();
+    }
+  }
+}
+function addStationEnd(id, long, lat, name, endTime){
+  if(lat != null && long != null) {
+    station = stations.find((s) => s.name == name);
+    if(station == null) {
+      station = new Station(id, long, lat, name);
+      stations.push(station);
+    }
+    if(endTime != null) {
+      station.bikesIn.push(new Date(endTime));
+      station.bikesIn.sort();
+    }
+  }
 }
 
 function findStations(data) {
   for(idx in data){
     row = data[idx]
-    addStation(row['Start Station ID'], row['Start Station Longitude'], row['Start Station Latitude'], row['Start Station Name']);
-    addStation(row['End Station ID'], row['End Station Longitude'], row['End Station Latitude'], row['End Station Name']);
+    addStationStart(row['Start Station ID'], row['Start Station Longitude'], row['Start Station Latitude'], row['Start Station Name'], row['Start Time']);
+    addStationEnd(row['End Station ID'], row['End Station Longitude'], row['End Station Latitude'], row['End Station Name'], row['Stop Time']);
   }
 }
 
@@ -94,14 +120,14 @@ function plotTrips(data) {
       .append('circle')
       .attr('r', '2px')
       .attr('fill', 'black')
-      .attr('id', function(d) { return bikeId(d); }) 
+      .attr('id', 'bike') 
       .attr('cx', function(d) { return proj(d['Start Station Longitude'], d['Start Station Latitude'])[0]; })
       .attr('cy', function(d) { return proj(d['Start Station Longitude'], d['Start Station Latitude'])[1]; })
       .transition()
       .attr('cx', function(d) { return proj(d['End Station Longitude'], d['End Station Latitude'])[0]; })
       .attr('cy', function(d) { return proj(d['End Station Longitude'], d['End Station Latitude'])[1]; })
       .duration(function(d) { return d['Trip Duration'] * 5; })
-      .delay(function(d) { return (new Date(d['Start Time']) - d3.min(data, function(d) { return new Date(d['Start Time']);})) / 75000;})
+      .delay(function(d) { return (new Date(d['Start Time']) - minDate) / 75000;})
 /*      .on('end', function() {
         d3.select('this')
             .transition()
@@ -111,17 +137,43 @@ function plotTrips(data) {
 //      .on("end",repeat);
 }
 
-function stationDelta(data) {
-  var svg = d3.select('body').append('svg')
+function plotStationDelta(bikesIn){//, bikesOut) {
+  console.log(bikesIn.length);
+ /* var svg = d3.select('body').append('svg')
       .attr('width', width)
-      .attr('height', height);
+      .attr('height', height);*/
+
+  var x = d3.scaleLinear()
+    .domain([d3.min(bikesIn), d3.max(bikesIn)])
+    .range([0, width]); 
+  var y = d3.scaleLinear()
+    .domain([0, bikesIn.length])
+    .range([height, 0]); 
+  
+  bikesIn = _.zip(bikesIn, _.range(bikesIn.length));
+//  bikesOut = _.zip(bikesOut, _.range(bikesOut.length));
+  
+  line = d3.line()
+    .x(function(d) { console.log(d[0]);return x(d[0]); })
+    .y(function(d) { console.log(d[1]);return y(d[1]); });
+  
+  svg.append('path')
+      .data(bikesIn)
+      .attr('class', 'line')
+      .attr('d', line);
+  
 }
 //d3.csv('http://localhost:8888/201612-citibike-tripdata.csv').then(function(data) {
-d3.csv('./data/201612-citibike-tripdata.csv').then(function(data) {
+d3.csv('./201612-citibike-tripdata.csv').then(function(data) {
   // cant use all the data
+  console.log('loaded');
   subSet = _.take(_.shuffle(data), 1500)
-  plotTrips(subSet);
-  plotStations(data);
+  findStations(subSet);
+
+//  minDate = d3.min(subSet, function(d) { return new Date(d['Start Time']);});
+//  plotTrips(subSet);
+//  plotStations(subSet);
+  plotStationDelta(stations.map(s => s.bikesIn).filter(bikes => bikes.length > 0).flat())//, stations.map(s => s.bikesout).filter(bikes => bikes.length > 0).flat())
 //  plotStations(stations);
 });
     
