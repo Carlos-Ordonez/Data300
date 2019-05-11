@@ -10,14 +10,28 @@
 var margin = {top: 20, right: 20, bottom: 50, left: 75};
 var width = 850 - margin.left - margin.right;
 var height = 1000 - margin.top - margin.bottom;
-var svg = d3.select('body').append('svg')
+var svgMap = d3.select('body').append('svg')
       .attr('width', width)
       .attr('height', height);
 var minDate;
+var tooltip = d3.select('body')
+    .append('div')
+    .style('position', 'absolute')
+    .style('z-index', '10')
+    .style('visibility', 'hidden')
+    .style('font-family', 'Tahoma')
+    .style('text-shadow', '0px 0px 1.5px lightblue')
+    .style('background-color', '#FFFFFFB3');
 var projection = d3.geoMercator()
       .translate([(width) / 2, (height)/2])
       .scale(200000)
       .center([-73.99, 40.72]);
+      
+var svgDelta = d3.select('body').append('svg')
+    .attr('width', width)
+    .attr('height', height);
+
+var selectedStations = [];
 
 function proj(long, lat) {
   return projection([parseFloat(long), parseFloat(lat)]);
@@ -35,7 +49,7 @@ function Station(id, long, lat, name) {
   this.bikesOut = [];
 }
 
-function plotStations(data){
+function plotStations(data) {
   latMean = 0;
   longMean = 0;
   for(station in stations){
@@ -46,7 +60,7 @@ function plotStations(data){
   var path = d3.geoPath()
       .projection(projection);
   
-  svg.append('g')
+  svgMap.append('g')
       .selectAll('circle')
       .data(stations)
       .enter()
@@ -59,6 +73,30 @@ function plotStations(data){
       .attr('stroke', 'black')
       .attr('stroke-width', 1)
       .attr('count', 15)
+      .on('mouseover', function(d) {      
+         d3.select(this).attr('r', 5.5).style('fill', 'red');
+         tooltip.style('visibility', 'visible').text(d.name);})
+      .on('mousemove', function(d){
+        tooltip.style('top',(d3.event.pageY-10)+'px').style('left',(d3.event.pageX+15)+'px');
+      })
+      .on('mouseout', function(d) {
+        tooltip.style('visibility', 'hidden');
+        if(selectedStations.includes(d)) {
+          d3.select(this).attr('r', 4.5).style('fill', 'lightblue');
+        } else {
+          d3.select(this).attr('r', 3).style('fill', 'white');
+        }
+
+      })               
+      .on('click', function(d) {
+        if(selectedStations.includes(d)) {
+          selectedStations.splice(selectedStations.indexOf(d), 1 );
+        } else {
+          selectedStations.push(d);
+          d3.select(this).attr('r', 4.5).style('fill', 'lightblue');
+        }
+        plotStationsDelta(selectedStations);
+      })
       .each(function(d, i){
           station = d3.select(this)
           for(startTime in d.bikesIn) {
@@ -66,7 +104,7 @@ function plotStations(data){
                 .transition()
                 .attr('count', function(d) { return station.attr('count') + 1;})
                 .attr('r', function(d) { return station.attr('count') + 1;})
-//                .attr('fill', function(d) { return d3.interpolateRgb("red", "blue")(d3.select(this).attr('count'));})
+//                .attr('fill', function(d) { return d3.interpolateRgb('red', 'blue')(d3.select(this).attr('count'));})
                 .delay(function(d) { return (new Date(startTime) - minDate) / 75000;});
           }
         });
@@ -86,7 +124,7 @@ function addStationStart(id, long, lat, name, startTime){
     }
     if(startTime != null) {
       station.bikesOut.push(new Date(startTime));
-      station.bikesOut.sort();
+      station.bikesOut.sort(date_sort_asc);
     }
   }
 }
@@ -99,7 +137,7 @@ function addStationEnd(id, long, lat, name, endTime){
     }
     if(endTime != null) {
       station.bikesIn.push(new Date(endTime));
-      station.bikesIn.sort();
+      station.bikesIn.sort(date_sort_asc);
     }
   }
 }
@@ -113,7 +151,7 @@ function findStations(data) {
 }
 
 function plotTrips(data) {
-  svg.append('g')
+  svgMap.append('g')
       .selectAll('circle')
       .data(data)
       .enter()
@@ -134,50 +172,92 @@ function plotTrips(data) {
             .attr('r', '1px')
             .attr('fill', 'black');
       });*/
-//      .on("end",repeat);
+//      .on('end',repeat);
 }
 
-function plotStationDelta(bikesIn){//, bikesOut) {
-  console.log(bikesIn.length);
- /* var svg = d3.select('body').append('svg')
-      .attr('width', width)
-      .attr('height', height);*/
+var date_sort_asc = function (date1, date2) {
+  if (date1 > date2) return 1;
+  if (date1 < date2) return -1;
+  return 0;
+};
 
-  var x = d3.scaleLinear()
-    .domain([d3.min(bikesIn), d3.max(bikesIn)])
+function plotStationsDelta(selectedStations) {
+  for(i = 0; i < selectedStations.length; i++) {
+    plotStationDelta(selectedStations[i].bikesIn, selectedStations[i].bikesOut);
+  }
+}
+
+function plotStationDelta(bikesIn, bikesOut){
+  console.log('plotting ' + bikesIn)
+  idxIn = 0;
+  idxOut = 0;
+  currentDate = minDate;
+  currentDelta = 0;
+  deltas = []
+  maxDelta = 0;
+  minDelta = 0;
+  while(idxIn < bikesIn.length && idxOut < bikesOut.length) {
+    if(bikesIn[idxIn] < bikesOut[idxOut]) {
+      currentDelta++;
+      deltas.push([bikesIn[idxIn], currentDelta]);
+      idxIn++;
+      console.log(currentDelta);
+    } else if(bikesIn[idxIn] > bikesOut[idxOut]) {
+      currentDelta--;
+      deltas.push([bikesOut[idxOut], currentDelta]);
+      idxOut++;
+      console.log(currentDelta);
+    } else {
+      idxIn++;
+      idxOut++;
+      console.log('equality! ' + currentDelta);
+    }
+    if(currentDelta > maxDelta) {
+      maxDelta = currentDelta;
+    }
+    if(currentDelta < minDelta) {
+      minDelta = currentDelta;
+    }
+  }
+  console.log('calced delta');
+  console.log(deltas);
+  var x = d3.scaleTime()
+    .domain([Math.min(d3.min(bikesIn), d3.min(bikesOut)), Math.max(d3.max(bikesIn), d3.max(bikesOut))])
     .range([0, width]); 
   var y = d3.scaleLinear()
-    .domain([0, bikesIn.length])
+    .domain([minDelta, maxDelta])
     .range([height, 0]); 
-  
+    
   bikesIn = _.zip(bikesIn, _.range(bikesIn.length));
-//  bikesOut = _.zip(bikesOut, _.range(bikesOut.length));
-  
+  bikesOut = _.zip(bikesOut, _.range(bikesOut.length));
+
   line = d3.line()
-    .x(function(d) { console.log(d[0]);return x(d[0]); })
-    .y(function(d) { console.log(d[1]);return y(d[1]); });
+    .x(function(d, i) { return x(d[0]); })
+    .y(function(d) { return y(d[1]); });
   
-  svg.append('path')
-      .data(bikesIn)
+  svgDelta.append('path')
       .attr('class', 'line')
-      .attr('d', line);
-  
+      .attr('d', line(deltas))
+      .attr('stroke', 'blue')
+      .attr('stroke-width', 2)
+      .attr('fill', 'none');
 }
 //d3.csv('http://localhost:8888/201612-citibike-tripdata.csv').then(function(data) {
-d3.csv('./201612-citibike-tripdata.csv').then(function(data) {
+d3.csv('./data/201612-citibike-tripdata.csv').then(function(data) {
   // cant use all the data
   console.log('loaded');
-  subSet = _.take(_.shuffle(data), 1500)
+  subSet = _.take(_.shuffle(data), 5000)
   findStations(subSet);
 
-//  minDate = d3.min(subSet, function(d) { return new Date(d['Start Time']);});
+  minDate = d3.min(subSet, function(d) { return new Date(d['Start Time']);});
 //  plotTrips(subSet);
-//  plotStations(subSet);
-  plotStationDelta(stations.map(s => s.bikesIn).filter(bikes => bikes.length > 0).flat())//, stations.map(s => s.bikesout).filter(bikes => bikes.length > 0).flat())
+  plotStations(subSet);
+
+//  plotStationDelta(stations.map(s => s.bikesIn).flat().sort(date_sort_asc), stations.map(s => s.bikesOut).flat().sort(date_sort_asc))
 //  plotStations(stations);
 });
     
-/*d3.csv("./201612-citibike-tripdata.csv").then(function(data) {
+/*d3.csv('./201612-citibike-tripdata.csv').then(function(data) {
   console.log(data[0]);
 });*/
 </script>
