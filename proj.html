@@ -3,7 +3,7 @@
 <html>
   <head>
     <script src="https://d3js.org/d3.v5.min.js"></script>
-    <script src="./_.js"></script>
+    <script src="_.js"></script>
   </head>
   <body>
 <script type="text/javascript">
@@ -128,6 +128,8 @@ function addStationStart(id, long, lat, name, startTime){
     }
   }
 }
+
+//TODO make stations sorted on station name, or preprocess this data on python and read that in.  
 function addStationEnd(id, long, lat, name, endTime){
   if(lat != null && long != null) {
     station = stations.find((s) => s.name == name);
@@ -182,13 +184,13 @@ var date_sort_asc = function (date1, date2) {
 };
 
 function plotStationsDelta(selectedStations) {
+  svgDelta.selectAll('path').remove();
   for(i = 0; i < selectedStations.length; i++) {
     plotStationDelta(selectedStations[i].bikesIn, selectedStations[i].bikesOut);
   }
 }
 
 function plotStationDelta(bikesIn, bikesOut){
-  console.log('plotting ' + bikesIn)
   idxIn = 0;
   idxOut = 0;
   currentDate = minDate;
@@ -196,21 +198,19 @@ function plotStationDelta(bikesIn, bikesOut){
   deltas = []
   maxDelta = 0;
   minDelta = 0;
+  //TODO precalc this?
   while(idxIn < bikesIn.length && idxOut < bikesOut.length) {
     if(bikesIn[idxIn] < bikesOut[idxOut]) {
       currentDelta++;
       deltas.push([bikesIn[idxIn], currentDelta]);
       idxIn++;
-      console.log(currentDelta);
     } else if(bikesIn[idxIn] > bikesOut[idxOut]) {
       currentDelta--;
       deltas.push([bikesOut[idxOut], currentDelta]);
       idxOut++;
-      console.log(currentDelta);
     } else {
       idxIn++;
       idxOut++;
-      console.log('equality! ' + currentDelta);
     }
     if(currentDelta > maxDelta) {
       maxDelta = currentDelta;
@@ -219,8 +219,6 @@ function plotStationDelta(bikesIn, bikesOut){
       minDelta = currentDelta;
     }
   }
-  console.log('calced delta');
-  console.log(deltas);
   var x = d3.scaleTime()
     .domain([Math.min(d3.min(bikesIn), d3.min(bikesOut)), Math.max(d3.max(bikesIn), d3.max(bikesOut))])
     .range([0, width]); 
@@ -234,7 +232,7 @@ function plotStationDelta(bikesIn, bikesOut){
   line = d3.line()
     .x(function(d, i) { return x(d[0]); })
     .y(function(d) { return y(d[1]); });
-  
+  //TODO make line different colors for ++ and --, plot zero.  Lastly make it so the lines start and stop at the same points.  
   svgDelta.append('path')
       .attr('class', 'line')
       .attr('d', line(deltas))
@@ -244,17 +242,15 @@ function plotStationDelta(bikesIn, bikesOut){
 }
 //d3.csv('http://localhost:8888/201612-citibike-tripdata.csv').then(function(data) {
 d3.csv('./data/201612-citibike-tripdata.csv').then(function(data) {
-  // cant use all the data
+  // cant use all the data ~800000 rows
   console.log('loaded');
   subSet = _.take(_.shuffle(data), 5000)
-  findStations(subSet);
+  findStations(subSet); //TODO speed up?
 
   minDate = d3.min(subSet, function(d) { return new Date(d['Start Time']);});
-//  plotTrips(subSet);
-  plotStations(subSet);
+  plotTrips(subSet);
+  plotStations(subSet); //TODO color plotted should rotate through a cmap, shift click should pause rotation.
 
-//  plotStationDelta(stations.map(s => s.bikesIn).flat().sort(date_sort_asc), stations.map(s => s.bikesOut).flat().sort(date_sort_asc))
-//  plotStations(stations);
 });
     
 /*d3.csv('./201612-citibike-tripdata.csv').then(function(data) {
