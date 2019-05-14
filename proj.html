@@ -33,6 +33,10 @@ var cmapMax = 8;
 var svgDelta = d3.select('body').append('svg')
     .attr('width', width)
     .attr('height', height);
+var line = d3.line()
+    .x(function(d, i) { return x(d[0]); })
+    .y(function(d) { return y(d[1]); })
+    .curve(d3.curveMonotoneX);
 var selectedStations = [];
 
 function proj(long, lat) {
@@ -76,7 +80,7 @@ function plotStations(data) {
       .attr('stroke-width', 1)
       .attr('count', 15)
       .on('mouseover', function(d) {      
-         d3.select(this).attr('r', 5.5);//.style('fill', 'red');
+         d3.select(this).attr('r', 5.5).style('fill', 'red');
          tooltip.style('visibility', 'visible').text(d.name);})
       .on('mousemove', function(d){
         tooltip.style('top',(d3.event.pageY-10)+'px').style('left',(d3.event.pageX+15)+'px');
@@ -86,7 +90,7 @@ function plotStations(data) {
         if(!selectedStations.includes(d)) {
           d3.select(this).attr('r', 3).style('fill', 'white');
         } else {
-          d3.select(this).attr('r', 4.5);//.style('fill', 'lightblue');
+          d3.select(this).attr('r', 4.5).style('fill', d.color);
         }
 
       })               
@@ -198,7 +202,13 @@ function plotStationsDelta(selectedStations) {
   for(i = 0; i < selectedStations.length; i++) {
     plotStationDelta(selectedStations[i], minDelta, maxDelta);
   }
-  //TODO plot the zero line
+
+  svgDelta.append('path')
+      .attr('class', 'line')
+      .attr('d', line([[minDate, 0], [maxDate, 0]]))
+      .attr('stroke', 'black')
+      .attr('stroke-width', 1)
+      .attr('fill', 'none');
 }
 
 function calculateDeltas(station) {
