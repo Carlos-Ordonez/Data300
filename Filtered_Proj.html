@@ -275,8 +275,8 @@
             subSet.forEach(function (d) {
                 d['Start Time'] = new Date((d['Start Time']))
             })
-
-
+            
+            //TODO weekday / weekend?
             saturday = _.filter(subSet, function (d) { return formatDay(d['Start Time']) % 7 == 4 });
             sunday = _.filter(subSet, function (d) { return formatDay(d['Start Time']) % 7 == 5 });
             monday = _.filter(subSet, function (d) { return formatDay(d['Start Time']) % 7 == 6 });

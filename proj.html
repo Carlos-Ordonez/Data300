@@ -3,6 +3,7 @@
 <html>
   <head>
     <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script> 
     <script src="_.js"></script>
   </head>
   <body>
@@ -14,6 +15,7 @@ var svgMap = d3.select('body').append('svg')
       .attr('width', width)
       .attr('height', height);
 var minDate;
+var maxDate;
 var tooltip = d3.select('body')
     .append('div')
     .style('position', 'absolute')
@@ -26,11 +28,11 @@ var projection = d3.geoMercator()
       .translate([(width) / 2, (height)/2])
       .scale(200000)
       .center([-73.99, 40.72]);
-      
+var cmap = d3.schemeAccent;
+var cmapMax = 8;
 var svgDelta = d3.select('body').append('svg')
     .attr('width', width)
     .attr('height', height);
-
 var selectedStations = [];
 
 function proj(long, lat) {
@@ -74,17 +76,17 @@ function plotStations(data) {
       .attr('stroke-width', 1)
       .attr('count', 15)
       .on('mouseover', function(d) {      
-         d3.select(this).attr('r', 5.5).style('fill', 'red');
+         d3.select(this).attr('r', 5.5);//.style('fill', 'red');
          tooltip.style('visibility', 'visible').text(d.name);})
       .on('mousemove', function(d){
         tooltip.style('top',(d3.event.pageY-10)+'px').style('left',(d3.event.pageX+15)+'px');
       })
       .on('mouseout', function(d) {
         tooltip.style('visibility', 'hidden');
-        if(selectedStations.includes(d)) {
-          d3.select(this).attr('r', 4.5).style('fill', 'lightblue');
-        } else {
+        if(!selectedStations.includes(d)) {
           d3.select(this).attr('r', 3).style('fill', 'white');
+        } else {
+          d3.select(this).attr('r', 4.5);//.style('fill', 'lightblue');
         }
 
       })               
@@ -93,7 +95,8 @@ function plotStations(data) {
           selectedStations.splice(selectedStations.indexOf(d), 1 );
         } else {
           selectedStations.push(d);
-          d3.select(this).attr('r', 4.5).style('fill', 'lightblue');
+          d.color = cmap[selectedStations.indexOf(d) % 8];
+          d3.select(this).attr('r', 4.5).style('fill', d.color);
         }
         plotStationsDelta(selectedStations);
       })
@@ -186,27 +189,36 @@ var date_sort_asc = function (date1, date2) {
 function plotStationsDelta(selectedStations) {
   svgDelta.selectAll('path').remove();
   for(i = 0; i < selectedStations.length; i++) {
-    plotStationDelta(selectedStations[i].bikesIn, selectedStations[i].bikesOut);
+    if(selectedStations[i].deltas == undefined) {
+      selectedStations[i].deltas = calculateDeltas(selectedStations[i]);
+    }
   }
+  minDelta = d3.min(selectedStations, function(s) { return d3.min(s.deltas, function(d) { return d[1];})});
+  maxDelta = d3.max(selectedStations, function(s) { return d3.max(s.deltas, function(d) { return d[1];})});
+  for(i = 0; i < selectedStations.length; i++) {
+    plotStationDelta(selectedStations[i], minDelta, maxDelta);
+  }
+  //TODO plot the zero line
 }
 
-function plotStationDelta(bikesIn, bikesOut){
+function calculateDeltas(station) {
   idxIn = 0;
   idxOut = 0;
   currentDate = minDate;
   currentDelta = 0;
-  deltas = []
+  station.deltas = []
   maxDelta = 0;
   minDelta = 0;
   //TODO precalc this?
-  while(idxIn < bikesIn.length && idxOut < bikesOut.length) {
-    if(bikesIn[idxIn] < bikesOut[idxOut]) {
+  station.deltas.push([minDate, currentDelta]);
+  while(idxIn < station.bikesIn.length && idxOut < station.bikesOut.length) {
+    if(station.bikesIn[idxIn] < station.bikesOut[idxOut]) {
       currentDelta++;
-      deltas.push([bikesIn[idxIn], currentDelta]);
+      station.deltas.push([station.bikesIn[idxIn], currentDelta]);
       idxIn++;
-    } else if(bikesIn[idxIn] > bikesOut[idxOut]) {
+    } else if(station.bikesIn[idxIn] > station.bikesOut[idxOut]) {
       currentDelta--;
-      deltas.push([bikesOut[idxOut], currentDelta]);
+      station.deltas.push([station.bikesOut[idxOut], currentDelta]);
       idxOut++;
     } else {
       idxIn++;
@@ -219,36 +231,44 @@ function plotStationDelta(bikesIn, bikesOut){
       minDelta = currentDelta;
     }
   }
+  station.deltas.push([maxDate, currentDelta]);
+  return station.deltas;
+}
+
+function plotStationDelta(station, minDelta, maxDelta){
+  if(station.deltas == undefined) {
+    station.deltas = calculateDeltas(station);
+  }
   var x = d3.scaleTime()
-    .domain([Math.min(d3.min(bikesIn), d3.min(bikesOut)), Math.max(d3.max(bikesIn), d3.max(bikesOut))])
+    .domain([minDate, maxDate])
     .range([0, width]); 
+  //TODO this dont work vv min delta and xax delta change for diff stations :(
   var y = d3.scaleLinear()
     .domain([minDelta, maxDelta])
     .range([height, 0]); 
-    
-  bikesIn = _.zip(bikesIn, _.range(bikesIn.length));
-  bikesOut = _.zip(bikesOut, _.range(bikesOut.length));
 
   line = d3.line()
     .x(function(d, i) { return x(d[0]); })
-    .y(function(d) { return y(d[1]); });
+    .y(function(d) { return y(d[1]); })
+    .curve(d3.curveMonotoneX);
   //TODO make line different colors for ++ and --, plot zero.  Lastly make it so the lines start and stop at the same points.  
   svgDelta.append('path')
       .attr('class', 'line')
-      .attr('d', line(deltas))
-      .attr('stroke', 'blue')
+      .attr('d', line(station.deltas))
+      .attr('stroke', station.color)
       .attr('stroke-width', 2)
       .attr('fill', 'none');
 }
-//d3.csv('http://localhost:8888/201612-citibike-tripdata.csv').then(function(data) {
-d3.csv('./data/201612-citibike-tripdata.csv').then(function(data) {
+
+d3.csv('./Data/201612-citibike-tripdata.csv').then(function(data) {
   // cant use all the data ~800000 rows
   console.log('loaded');
-  subSet = _.take(_.shuffle(data), 5000)
-  findStations(subSet); //TODO speed up?
+  subSet = _.take(_.shuffle(data), 1500)
+  findStations(subSet); //TODO speed up? sort shit implement binary search
 
   minDate = d3.min(subSet, function(d) { return new Date(d['Start Time']);});
-  plotTrips(subSet);
+  maxDate = d3.max(subSet, function(d) { return new Date(d['Start Time']);});
+//  plotTrips(subSet);
   plotStations(subSet); //TODO color plotted should rotate through a cmap, shift click should pause rotation.
 
 });

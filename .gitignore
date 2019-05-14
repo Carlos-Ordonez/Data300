@@ -1,2 +1,3 @@
 # dont track data folder, too large to host on git
 data/
+Data/
