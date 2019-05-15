@@ -5,6 +5,7 @@
     <script src="https://d3js.org/d3.v5.min.js"></script>
     <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script> 
     <script src="_.js"></script>
+    <script src="station_utils.js"></script>
   </head>
   <body>
 <script type="text/javascript">
@@ -24,10 +25,6 @@ var tooltip = d3.select('body')
     .style('font-family', 'Tahoma')
     .style('text-shadow', '0px 0px 1.5px lightblue')
     .style('background-color', '#FFFFFFB3');
-var projection = d3.geoMercator()
-      .translate([(width) / 2, (height)/2])
-      .scale(200000)
-      .center([-73.99, 40.72]);
 var cmap = d3.schemeAccent;
 var cmapMax = 8;
 var svgDelta = d3.select('body').append('svg')
@@ -38,23 +35,11 @@ var line = d3.line()
     .y(function(d) { return y(d[1]); })
     .curve(d3.curveMonotoneX);
 var selectedStations = [];
-
-function proj(long, lat) {
-  return projection([parseFloat(long), parseFloat(lat)]);
-}
-
-function bikeId(bike) {
-  return 'Bike-' + bike['Bike ID'] + bike['Start Time'].replace(':', '_').replace(':', '_').replace(' ', '');
-}
-
-function Station(id, long, lat, name) {
-  this.id = id;
-  this.geo = [parseFloat(long), parseFloat(lat)];
-  this.name = name;
-  this.bikesIn = [];
-  this.bikesOut = [];
-}
-
+var projection = d3.geoMercator()
+      .translate([(width) / 2, (height)/2])
+      .scale(200000)
+      .center([-73.99, 40.72]);
+var stations = [];
 function plotStations(data) {
   latMean = 0;
   longMean = 0;
@@ -62,10 +47,8 @@ function plotStations(data) {
     latMean+= stations[station].geo[1];
     longMean+=stations[station].geo[0];
   }
-
   var path = d3.geoPath()
       .projection(projection);
-  
   svgMap.append('g')
       .selectAll('circle')
       .data(stations)
@@ -103,52 +86,7 @@ function plotStations(data) {
           d3.select(this).attr('r', 4.5).style('fill', d.color);
         }
         plotStationsDelta(selectedStations);
-      })
-      .each(function(d, i){
-          station = d3.select(this)
-          for(startTime in d.bikesIn) {
-            d3.select(this)
-                .transition()
-                .attr('count', function(d) { return station.attr('count') + 1;})
-                .attr('r', function(d) { return station.attr('count') + 1;})
-//                .attr('fill', function(d) { return d3.interpolateRgb('red', 'blue')(d3.select(this).attr('count'));})
-                .delay(function(d) { return (new Date(startTime) - minDate) / 75000;});
-          }
-        });
-          
-
-//      .attr('count', function(d) { svg.select(this)
-      //(new Date(d['Start Time']) - d3.min(data, function(d) { return new Date(d['Start Time']);})) / 75000*/
-}
-
-stations = []
-function addStationStart(id, long, lat, name, startTime){
-  if(lat != null && long != null) {
-    station = stations.find((s) => s.name == name);
-    if(station == null) {
-      station = new Station(id, long, lat, name);
-      stations.push(station);
-    }
-    if(startTime != null) {
-      station.bikesOut.push(new Date(startTime));
-      station.bikesOut.sort(date_sort_asc);
-    }
-  }
-}
-
-//TODO make stations sorted on station name, or preprocess this data on python and read that in.  
-function addStationEnd(id, long, lat, name, endTime){
-  if(lat != null && long != null) {
-    station = stations.find((s) => s.name == name);
-    if(station == null) {
-      station = new Station(id, long, lat, name);
-      stations.push(station);
-    }
-    if(endTime != null) {
-      station.bikesIn.push(new Date(endTime));
-      station.bikesIn.sort(date_sort_asc);
-    }
-  }
+      });
 }
 
 function findStations(data) {
@@ -175,20 +113,7 @@ function plotTrips(data) {
       .attr('cy', function(d) { return proj(d['End Station Longitude'], d['End Station Latitude'])[1]; })
       .duration(function(d) { return d['Trip Duration'] * 5; })
       .delay(function(d) { return (new Date(d['Start Time']) - minDate) / 75000;})
-/*      .on('end', function() {
-        d3.select('this')
-            .transition()
-            .attr('r', '1px')
-            .attr('fill', 'black');
-      });*/
-//      .on('end',repeat);
 }
-
-var date_sort_asc = function (date1, date2) {
-  if (date1 > date2) return 1;
-  if (date1 < date2) return -1;
-  return 0;
-};
 
 function plotStationsDelta(selectedStations) {
   svgDelta.selectAll('path').remove();
@@ -211,40 +136,6 @@ function plotStationsDelta(selectedStations) {
       .attr('fill', 'none');
 }
 
-function calculateDeltas(station) {
-  idxIn = 0;
-  idxOut = 0;
-  currentDate = minDate;
-  currentDelta = 0;
-  station.deltas = []
-  maxDelta = 0;
-  minDelta = 0;
-  //TODO precalc this?
-  station.deltas.push([minDate, currentDelta]);
-  while(idxIn < station.bikesIn.length && idxOut < station.bikesOut.length) {
-    if(station.bikesIn[idxIn] < station.bikesOut[idxOut]) {
-      currentDelta++;
-      station.deltas.push([station.bikesIn[idxIn], currentDelta]);
-      idxIn++;
-    } else if(station.bikesIn[idxIn] > station.bikesOut[idxOut]) {
-      currentDelta--;
-      station.deltas.push([station.bikesOut[idxOut], currentDelta]);
-      idxOut++;
-    } else {
-      idxIn++;
-      idxOut++;
-    }
-    if(currentDelta > maxDelta) {
-      maxDelta = currentDelta;
-    }
-    if(currentDelta < minDelta) {
-      minDelta = currentDelta;
-    }
-  }
-  station.deltas.push([maxDate, currentDelta]);
-  return station.deltas;
-}
-
 function plotStationDelta(station, minDelta, maxDelta){
   if(station.deltas == undefined) {
     station.deltas = calculateDeltas(station);
@@ -252,7 +143,6 @@ function plotStationDelta(station, minDelta, maxDelta){
   var x = d3.scaleTime()
     .domain([minDate, maxDate])
     .range([0, width]); 
-  //TODO this dont work vv min delta and xax delta change for diff stations :(
   var y = d3.scaleLinear()
     .domain([minDelta, maxDelta])
     .range([height, 0]); 
@@ -261,7 +151,7 @@ function plotStationDelta(station, minDelta, maxDelta){
     .x(function(d, i) { return x(d[0]); })
     .y(function(d) { return y(d[1]); })
     .curve(d3.curveMonotoneX);
-  //TODO make line different colors for ++ and --, plot zero.  Lastly make it so the lines start and stop at the same points.  
+  //TODO make line different colors for ++ and --, 
   svgDelta.append('path')
       .attr('class', 'line')
       .attr('d', line(station.deltas))
@@ -273,13 +163,13 @@ function plotStationDelta(station, minDelta, maxDelta){
 d3.csv('./Data/201612-citibike-tripdata.csv').then(function(data) {
   // cant use all the data ~800000 rows
   console.log('loaded');
-  subSet = _.take(_.shuffle(data), 1500)
+  subSet = _.take(_.shuffle(data), 50000)
   findStations(subSet); //TODO speed up? sort shit implement binary search
 
   minDate = d3.min(subSet, function(d) { return new Date(d['Start Time']);});
   maxDate = d3.max(subSet, function(d) { return new Date(d['Start Time']);});
 //  plotTrips(subSet);
-  plotStations(subSet); //TODO color plotted should rotate through a cmap, shift click should pause rotation.
+  plotStations(subSet); //TODO shift click should pause rotation.
 
 });
     
