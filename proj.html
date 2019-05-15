@@ -161,7 +161,7 @@ function plotStationDelta(station, minDelta, maxDelta){
 }
 
 d3.csv('./Data/201612-citibike-tripdata.csv').then(function(data) {
-  // cant use all the data ~800000 rows
+  // cant use all ~800000 rows
   console.log('loaded');
   subSet = _.take(_.shuffle(data), 50000)
   findStations(subSet); //TODO speed up? sort shit implement binary search

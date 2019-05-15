@@ -64,7 +64,7 @@ function addStationStart(id, long, lat, name, startTime){
       station = new Station(id, long, lat, name);
       stationInsert(station);
     }
-    station.bikesOut.push(new Date(startTime));
+    station.bikesOut.push(startTime);
     station.bikesOut.sort(date_sort);
   }
 }
@@ -76,7 +76,7 @@ function addStationEnd(id, long, lat, name, endTime){
       station = new Station(id, long, lat, name);
       stationInsert(station);
     }
-    station.bikesIn.push(new Date(endTime));
+    station.bikesIn.push(endTime);
     station.bikesIn.sort(date_sort);
   }
 }
