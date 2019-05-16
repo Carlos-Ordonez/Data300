@@ -1,0 +1,23 @@
+img {
+    height: 175px;
+    width: 200px;
+}
+
+.center {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    width: 50%;
+    }
+
+button {
+    color:rgb(234,35,42);
+    font-weight: bold
+}
+
+.centerButtons {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    width: 50%;
+    }
